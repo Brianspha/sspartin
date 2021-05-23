@@ -1,13 +1,19 @@
 /*global artifacts, contract, it*/
 /**/
 // For documentation please see https://framework.embarklabs.io/docs/contracts_testing.html
-const Token = artifacts.require("ERC20");
-const Sablier = artifacts.require("Sablier");
-const Amazeng = artifacts.require("Amazeng");
+const SpartenUSD = artifacts.require("SpartenUSD");
+const SpartenToken = artifacts.require("SpartenToken");
+const VFRCoordinatorParentMock = artifacts.require("VFRCoordinatorParentMock");
+const StakingContract = artifacts.require("StakingContract");
 const bigNumber = require("bignumber.js");
 const intialAmount = new bigNumber(6000000 * 10 ** 18).toFixed();
+const utils = require("web3-utils");
+var hex = "0x6c3699283bda56ad74f6b855546325b68d482e983852a7a82979cc4807b641f4";
+var fee = 1 * 10 ** 18;
+console.log("hex: ", hex, " fee: ", fee);
+const convert = require("ether-converter");
 
-let accounts1,
+let accounts,
   tokenAmount,
   startDate,
   balance,
@@ -21,38 +27,36 @@ config(
   {
     contracts: {
       deploy: {
-        Amazeng: {
-          deps: ["ERC20", "Sablier"],
-          onDeploy: async ({ contracts, web3, logger }) => {
-            console.log("contracts: ", web3.eth.defaultAccount);
-            await contracts.Amazeng.methods
-              .init(
-                contracts.ERC20.options.address,
-                contracts.Sablier.options.address
-              )
-              .send({
-                gas: 800000,
-              });
-
-            await contracts.ERC20.methods
-              .transfer(contracts.Amazeng.options.address, intialAmount)
-              .send({
-                gas: 800000,
-              });
-
-            console.log("approved Amazeng contract...");
-          },
+        SpartenUSD: {
+          args: ["SSPartenToken", "ST", 18, intialAmount],
         },
-        ERC20: {
-          args: ["AmazengToken", "AT", 18, intialAmount],
+        SpartenToken: {
+          args: ["SSpartenToken", "ST"],
         },
-        CTokenManager: {
-          args: [],
+        VFRCoordinatorParentMock: {
+          //   deps: ["SpartenUSD"],
+          args: ["$SpartenUSD", hex.toString(), new bigNumber(fee).toFixed(0)],
         },
-        Sablier: {
-          deps: ["ERC20"],
-          args: ["$CTokenManager"],
+        StakingContract: {
+          deps: ["SpartenToken", "VFRCoordinatorParentMock", "SpartenUSD"],
+          args: [
+            "$SpartenToken",
+            "$VFRCoordinatorParentMock",
+            "$SpartenUSD",
+            hex,
+          ],
         },
+      },
+      afterDeploy: async ({ contracts, web3, logger }) => {
+        console.log("deployed contracts: ", web3.eth.defaultAccount);
+        var receipt = await contracts.SpartenUSD.methods
+          .transferFrom(
+            web3.eth.defaultAccount,
+            contracts.StakingContract.options.address,
+            intialAmount
+          )
+          .send({ gas: 6000000, from: web3.eth.defaultAccount });
+        console.log("receipt: ", receipt);
       },
     },
   },
@@ -61,81 +65,26 @@ config(
   }
 );
 
-contract("ERC720", async () => {
-  it("should init  token contract and mint tokens", async () => {
-    it("should transfer tokens to the Amazeng Contract", async () => {
-      await Token.methods.transfer(Amazeng.options.address, intialAmount).send({
-        gas: 600000,
-      });
-      assert.strictEqual(receipt != null, true);
-      // console.log('receipt: ', receipt.events.Approval.returnValues)
-    });
-    /**/
+contract("StakingContract", async () => {
+  it("Should transfer all tokens to staking contract", async () => {
+    var receipt = await SpartenUSD.methods
+      .approve(StakingContract.options.address, intialAmount)
+      .send({ gas: 6000000, from: accounts[0] });
+     receipt = await SpartenUSD.methods
+      .transfer(StakingContract.options.address, intialAmount)
+      .send({ gas: 6000000, from: accounts[0] });
+    assert.strictEqual(receipt != null, true, "Not transferred");
   });
-
-  it("should transfer 100000000000000000000000", async () => {
-    var receipt = await Token.methods
-      .transfer(accounts[1], new bigNumber(200000000000000000000000000))
+  it("Should start a new game", async () => {
+    console.log("accounts: ", StakingContract.options.address);
+    var receipt = await StakingContract.methods
+      .createNewGame(Math.round(Math.random() * 100), "https://google.com")
       .send({
         gas: 6000000,
+        from: accounts[0],
+        value: convert(1, "ether", "wei"),
       });
-    assert.strictEqual(receipt != null, true);
-    // console.log('receipt: ', receipt.events.Approval.returnValues)
+    console.log("receipt: ", receipt);
+    /**/
   });
 });
-
-contract("Amezeng", async function() {
-  console.log("Amazeng.options.address: ", Amazeng.options.address);
-  it("should start a stream", async function() {
-    tokenAmount = new bigNumber(Math.round(Math.random() * 300));
-    tokenAmount = tokenAmount.multipliedBy(new bigNumber(10).pow(18));
-    startDate = new bigNumber(
-      new Date(new Date().setHours(new Date().getMinutes() + 10)).getTime()
-    ).toFixed();
-    endDate = new bigNumber(
-      new Date(new Date().setDate(new Date().getDate() + 5)).getTime()
-    ).toFixed(); //5 days from now
-    startDate = Math.round(startDate);
-    endDate = Math.round(endDate);
-    console.log("startDate: ", startDate);
-    console.log("endDate: ", endDate);
-    console.log("tokenAmount: ", tokenAmount);
-    var timeDelta = new bigNumber(endDate - startDate);
-    console.log("timeDelta: ", timeDelta);
-    deposit = calculateDeposit(timeDelta, tokenAmount);
-    var bal = await Token.methods
-      .balanceOf(Amazeng.options.address)
-      .call({ gas: 6000000 });
-    console.log(deposit, bal, bal > deposit);
-    console.log(
-      `accounts[1],
-    deposit,
-    startDate,
-    endDate`,
-      accounts[2],
-      deposit,
-      startDate,
-      endDate
-    );
-    var streamReceipt = await Amazeng.methods
-      .startStream(deposit, startDate, endDate)
-      .send({ gas: 6000000 });
-    streamId = streamReceipt.events.streamCreated.returnValues.streamId;
-    console.log("streamReceipt: ", streamId);
-    await increaseTime(1608120580);
-  });
-  it("should check user balance", async function() {
-    var bal = await Sablier.methods
-      .balanceOf(streamId, accounts[2])
-      .call({ gas: 6000000 });
-    console.log("user balance: ", new bigNumber(bal).div(10 ** 18).toFixed());
-    assert.strictEqual(bal > 0, true);
-  });
-});
-
-function calculateDeposit(delta, deposit) {
-  var diff = deposit.minus(deposit.minus(deposit.mod(delta)));
-  deposit = new bigNumber(deposit).minus(diff);
-  console.log("deposit.toFixed(): ", deposit.toFixed());
-  return deposit.toFixed();
-}

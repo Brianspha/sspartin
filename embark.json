@@ -16,7 +16,7 @@
   "buildDir": "dist/",
   "config": "config/",
   "versions": {
-    "solc": "0.5.10"
+    "solc": "0.8.0"
   },
   "plugins": {
     "embark-geth": {},

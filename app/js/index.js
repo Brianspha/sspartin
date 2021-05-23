@@ -6,12 +6,10 @@ import Web3 from "web3";
 import $ from "jquery";
 import EmbarkJS from "../../embarkArtifacts/embarkjs";
 import token from "../../embarkArtifacts/contracts/ERC20";
-import sablier from "../../embarkArtifacts/contracts/Sablier";
 import utils from "web3-utils";
 import bigNumber from "bignumber.js";
 import "js-loading-overlay";
 import ERC20 from "../../embarkArtifacts/contracts/ERC20";
-import Amazeng from "../../embarkArtifacts/contracts/Amazeng";
 import RecordRTC from "recordrtc";
 import streamSaver from "streamsaver";
 import FileSaver from "file-saver";
@@ -258,120 +256,7 @@ function errorWithOptions(mesage) {
       }
     });
 }
-function startTokenStream(userAddress, moves) {
-  timer.pause();
-  JsLoadingOverlay.show({
-    spinnerIcon: "ball-running-dots",
-  });
-  var perRound = new bigNumber(100000).multipliedBy(new bigNumber(10).pow(18)); //@dev this is known i.e. decimal places
-  var amount = perRound.multipliedBy(tokenToStream);
-  var tempStartTime = new bigNumber(
-    new Date(new Date().setMinutes(new Date().getMinutes() + 10)).getTime()
-  ).toFixed();
-  var duration = getDuration(collectedTime);
-  if (duration.unit === "days") {
-    var endDate = new bigNumber(
-      new Date(
-        new Date().setDate(new Date().getDate() + duration.value)
-      ).getTime()
-    ).toFixed();
-  }
-  if (duration.unit === "hours") {
-    var endDate = new bigNumber(
-      new Date(
-        new Date().setHours(new Date().getHours() + duration.value)
-      ).getTime()
-    ).toFixed();
-  } else {
-    var endDate = new bigNumber(
-      new Date(
-        new Date().setMinutes(new Date().getMinutes() + duration.value + 30) //@dev add 30 minutes for safety
-      ).getTime()
-    ).toFixed();
-  }
-  var timeDelta = new bigNumber(tempStartTime - endDate);
-  console.log("timeDelta: ", timeDelta);
-  amount = calculateDeposit(timeDelta, amount);
-  amount = amount.toFixed();
-  console.log("user token payout: ", amount);
-  console.log("timeDelta: ", timeDelta, " endDate: ", endDate);
-  console.log("sablier", sablier);
-  Amazeng.methods
-    .startStream(amount, tempStartTime, endDate)
-    .send({
-      gas: 6000000,
-      from: userAddress,
-    })
-    .then(async (receipt, error) => {
-      if (receipt) {
-        successWithFooter(
-          "Token stream has been initiated, and will start in 10 minutes, please check your Amazeng token balance on Etherscan click on link in footer",
-          userAddress
-        );
 
-        var temp = JSON.parse(localStorage.getItem("player"));
-        temp.userID = userAddress;
-        var found = false;
-        temp.levels = temp.levels.map((level) => {
-          if (level.level === currentLevel) {
-            found = true;
-            level.sablierTimeCollected = collectedTime;
-            level.tokensCollected = tokenToStream;
-          }
-          collectedTime = 0;
-          tokenToStream = 0;
-          return level;
-        });
-        if (!found) {
-          temp.levels.push({
-            level: currentLevel,
-            time: currentTime,
-            steps: moves,
-            sablierTimeCollected: collectedTime,
-            tokensCollected: tokenToStream,
-          });
-        }
-        var test = await getSkyData();
-        found = false;
-        if (test) {
-          var data = await getSkyData();
-          data.data.players = data.data.players.map((player) => {
-            if (player.userID === userAddress) {
-              found = true;
-              temp.levels.map((level) => {
-                player.levels.push(level);
-              });
-            }
-            return player;
-          });
-          if (!found) {
-            data.data.players.push({
-              userID: userAddress,
-              levels: temp.levels,
-            });
-          }
-          await saveData(data.data);
-        } else {
-          user.levels = temp.levels;
-          user.userID = userAddress;
-          await saveData({ players: [user] });
-        }
-        localStorage.setItem("player", JSON.stringify(temp));
-        resetLabels(false);
-        continueTimer();
-      }
-      console.log("receipt: ", receipt);
-      console.log("error: ", error);
-      JsLoadingOverlay.hide();
-    })
-    .catch((err) => {
-      errorWithOptions(
-        "Something went wrong please restart game and try again"
-      );
-      console.log("error starting token stream: ", err);
-      JsLoadingOverlay.hide();
-    });
-}
 function saveData(data) {
   client.db.setJSON(privateKey, appSecret, data, revision).then((results) => {
     console.log("results: ", results);
@@ -1329,11 +1214,7 @@ function showCompatibilityError() {
 }
 web3.eth.net.getId((err, netId) => {
   switch (netId) {
-    case "80001":
-      console.log("This is matic");
-      break;
-    default:
-      showCompatibilityError()
+   
   }
 });
 document.addEventListener("contextmenu", function(e) {
